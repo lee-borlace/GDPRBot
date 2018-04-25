@@ -2,6 +2,8 @@
 using System.Threading.Tasks;
 using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Connector;
+using Microsoft.Bot.Builder.Dialogs.Internals;
+using Autofac;
 
 namespace GDPRBot.Bot.Dialogs
 {
@@ -24,17 +26,47 @@ namespace GDPRBot.Bot.Dialogs
 
             UpdateBotState(context);
 
-            context.UserData.SetValue("name", "Lee");
+            switch (activity.Text.ToLower())
+            {
+                // TODO : Other new methods exposed for GDPR.
+                case "export":
+                    await DoExport(context);
+                    break;
+                default:
+                    {
+                        // calculate something for us to return
+                        int length = (activity.Text ?? string.Empty).Length;
 
-            // calculate something for us to return
-            int length = (activity.Text ?? string.Empty).Length;
+                        // return our reply to the user
+                        await context.PostAsync($"You sent {activity.Text} which was {length} characters");
 
-            // return our reply to the user
-            await context.PostAsync($"You sent {activity.Text} which was {length} characters");
+                        context.Wait(MessageReceivedAsync);
+                    }
+                    break;
+            }
 
-            context.Wait(MessageReceivedAsync);
+
+           
         }
 
+        private async Task DoExport(IDialogContext context)
+        {
+            using (var scope = DialogModule.BeginLifetimeScope(Conversation.Container, context.Activity.AsMessageActivity()))
+            {
+                // TODO : This doesn't work. How the dickens do we get an IBotState so we can call ExportBotStateDataAsync() on it? 
+                var botState = scope.Resolve<IBotState>();
+
+                var result = await botState.ExportBotStateDataAsync("emulator");
+
+                await context.PostAsync(result.BotStateData.Count.ToString());
+                context.Wait(MessageReceivedAsync);
+            }
+        }
+
+        /// <summary>
+        /// Write some bot state.
+        /// </summary>
+        /// <param name="context">The context.</param>
         private void UpdateBotState(IDialogContext context)
         {
             _messageCount++;
