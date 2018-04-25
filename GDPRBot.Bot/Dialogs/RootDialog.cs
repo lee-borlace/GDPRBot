@@ -24,6 +24,12 @@ namespace GDPRBot.Bot.Dialogs
         {
             var activity = await result as Activity;
 
+            // Interesting, this correctly uses the storage configured in Global.asax.cs and doesn't generate the warning in the emulator. However
+            // StateClient and GetUserDataAsync() are both obsolete. How are we supposed to get these?
+            StateClient sc = context.Activity.GetStateClient();
+            var userData = await sc.BotState.GetUserDataAsync(context.Activity.ChannelId, context.Activity.From.Id);
+            userData.SetProperty("name", "Lee");
+
             UpdateBotState(context);
 
             switch (activity.Text.ToLower())
