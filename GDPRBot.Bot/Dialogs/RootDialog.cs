@@ -4,6 +4,7 @@ using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Connector;
 using Microsoft.Bot.Builder.Dialogs.Internals;
 using Autofac;
+using System.Threading;
 
 namespace GDPRBot.Bot.Dialogs
 {
@@ -12,6 +13,7 @@ namespace GDPRBot.Bot.Dialogs
     {
         private int _messageCount = 0;
 
+        private const string StateKey = "MessageCount";
 
         public Task StartAsync(IDialogContext context)
         {
@@ -24,22 +26,30 @@ namespace GDPRBot.Bot.Dialogs
         {
             var activity = await result as Activity;
 
-            // Interesting, this correctly uses the storage configured in Global.asax.cs and doesn't generate the warning in the emulator. However
-            // StateClient and GetUserDataAsync() are both obsolete. How are we supposed to get these?
-            StateClient sc = context.Activity.GetStateClient();
-            var userData = await sc.BotState.GetUserDataAsync(context.Activity.ChannelId, context.Activity.From.Id);
-            userData.SetProperty("name", "Lee");
+            //// Interesting, this correctly uses the storage configured in Global.asax.cs and doesn't generate the warning in the emulator. However
+            //// StateClient and GetUserDataAsync() are both obsolete. How are we supposed to get these?
+            //StateClient sc = context.Activity.GetStateClient();
+            //var userData = await sc.BotState.GetUserDataAsync(context.Activity.ChannelId, context.Activity.From.Id);
+            //userData.SetProperty("name", "Lee");
 
-            UpdateBotState(context);
+            
 
             switch (activity.Text.ToLower())
             {
                 // TODO : Other new methods exposed for GDPR.
+                case "show":
+                    await ShowBotState(context);
+                    break;
                 case "export":
                     await DoExport(context);
                     break;
+                case "clear":
+                    await DoClear(context);
+                    break;
                 default:
                     {
+                        UpdateBotState(context);
+
                         // calculate something for us to return
                         int length = (activity.Text ?? string.Empty).Length;
 
@@ -52,7 +62,20 @@ namespace GDPRBot.Bot.Dialogs
             }
 
 
-           
+
+        }
+
+        private async Task ShowBotState(IDialogContext context)
+        {
+            await context.PostAsync("Bot state as follows for 'MessageCount' key :");
+
+            string temp;
+
+            var value = context.UserData.TryGetValue(StateKey, out temp) ? temp : "N/A";
+            await context.PostAsync($"UserData : {value}");
+
+            value = context.PrivateConversationData.TryGetValue(StateKey, out temp) ? temp : "N/A";
+            await context.PostAsync($"PrivateConversationData : {value}");
         }
 
         private async Task DoExport(IDialogContext context)
@@ -69,6 +92,35 @@ namespace GDPRBot.Bot.Dialogs
             }
         }
 
+
+        private async Task DoClear(IDialogContext context)
+        {
+            using (var scope = DialogModule.BeginLifetimeScope(Conversation.Container, context.Activity.AsMessageActivity()))
+            {
+                var dataStore = scope.Resolve<IBotDataStore<BotData>>();
+
+                var address = new Address(
+                   context.Activity.Recipient.Id,
+                   context.Activity.ChannelId,
+                   context.Activity.From.Id,
+                   context.Activity.Conversation.Id,
+                   context.Activity.ServiceUrl);
+
+                var token = default(CancellationToken);
+
+                await dataStore.SaveAsync(address, BotStoreType.BotUserData, null, token);
+                await dataStore.SaveAsync(address, BotStoreType.BotPrivateConversationData, null, token);
+                await dataStore.FlushAsync(address, token);
+            }
+
+            // This works but won't be of much use outside the context of the bot.
+            //context.UserData.Clear();
+            //context.PrivateConversationData.Clear();
+
+            await context.PostAsync("All cleared!");
+        }
+
+
         /// <summary>
         /// Write some bot state.
         /// </summary>
@@ -77,9 +129,8 @@ namespace GDPRBot.Bot.Dialogs
         {
             _messageCount++;
 
-            context.UserData.SetValue("MessageCount", $"Message count in UserData = {_messageCount}");
-            context.ConversationData.SetValue("MessageCount", $"Message count in ConversationData = {_messageCount}");
-            context.PrivateConversationData.SetValue("MessageCount", $"Message count in PrivateConversationData = {_messageCount}");
+            context.UserData.SetValue(StateKey, $"Message count in UserData = {_messageCount}");
+            context.PrivateConversationData.SetValue(StateKey, $"Message count in PrivateConversationData = {_messageCount}");
         }
     }
 }
