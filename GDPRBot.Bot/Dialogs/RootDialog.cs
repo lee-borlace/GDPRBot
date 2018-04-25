@@ -8,6 +8,9 @@ namespace GDPRBot.Bot.Dialogs
     [Serializable]
     public class RootDialog : IDialog<object>
     {
+        private int _messageCount = 0;
+
+
         public Task StartAsync(IDialogContext context)
         {
             context.Wait(MessageReceivedAsync);
@@ -19,6 +22,10 @@ namespace GDPRBot.Bot.Dialogs
         {
             var activity = await result as Activity;
 
+            UpdateBotState(context);
+
+            context.UserData.SetValue("name", "Lee");
+
             // calculate something for us to return
             int length = (activity.Text ?? string.Empty).Length;
 
@@ -26,6 +33,15 @@ namespace GDPRBot.Bot.Dialogs
             await context.PostAsync($"You sent {activity.Text} which was {length} characters");
 
             context.Wait(MessageReceivedAsync);
+        }
+
+        private void UpdateBotState(IDialogContext context)
+        {
+            _messageCount++;
+
+            context.UserData.SetValue("MessageCount", $"Message count in UserData = {_messageCount}");
+            context.ConversationData.SetValue("MessageCount", $"Message count in ConversationData = {_messageCount}");
+            context.PrivateConversationData.SetValue("MessageCount", $"Message count in PrivateConversationData = {_messageCount}");
         }
     }
 }
